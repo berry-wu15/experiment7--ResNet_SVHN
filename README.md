@@ -320,8 +320,7 @@ epoch9:loss=0.2166,acc=0.9411
 #### 4.实验对三种不同的残差块训练结果的loss和accuracy进行了可视化
 <table>
  <tr>
- <td><img src="./Experimental Image/digit 0.png"  width="200px" height="300px" alt="digit 0"></td>
- <td><img src="./Experimental Image/interative recognition 0.png" width="200px" height="300px" alt="interactive recognition 0"></td>
+ <td><img src="./resnet_block_comparison.png"  width="200px" height="300px" alt="digit 0"></td>
  </tr>
 </table>
 ##
