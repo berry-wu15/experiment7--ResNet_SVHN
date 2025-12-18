@@ -317,6 +317,14 @@ epoch9:loss=0.2166,acc=0.9411
 最终测试：loss=0.2250,acc=0.9413
 ```
 ##
+#### 4.实验对三种不同的残差块训练结果的loss和accuracy进行了可视化
+<table>
+ <tr>
+ <td><img src="./Experimental Image/digit 0.png"  width="200px" height="300px" alt="digit 0"></td>
+ <td><img src="./Experimental Image/interative recognition 0.png" width="200px" height="300px" alt="interactive recognition 0"></td>
+ </tr>
+</table>
+##
 ##### 实验结果分析：
 ###### 1. 性能表现：全映射块最终测试准确率最高（94.13%），投影块（93.73%），恒等映射块稍低（92.89%），最高最低差距 1.24%，属于可接受范围；训练过程中，全映射块收敛速度最快，恒等映射块收敛稍慢但更稳定。
 ###### 2. 资源消耗（这里比较的是训练参数量以及训练测试耗时）：恒等映射块参数量最少（大概182.56k），训练时间最短（4min）。
