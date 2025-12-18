@@ -1,84 +1,150 @@
 # **Experiment7--ResNet_SVHN** 
-(实验7-ResNet实现SVHN分类)
-##### This experiment compares the performance, generalization ability and resource consumption of three residual block designs (identity block, projection block, and full-mapping block) on the SVHN dataset.
-###### 本实验比较了三种残差块设计（恒等映射块、投影块和全映射块）在 SVHN 数据集上的性能、泛化能力和资源消耗。
+(实验7-ResNet实现SVHN-街道实景门牌数据集分类)
+##### 本实验比较了三种残差块设计（恒等映射块、投影块和全映射块）在 SVHN 数据集上的准确率、计算资源耗时。
 ##
 
-## 1.Experimental Purpose
-##### 1.Master the basic principles of the convolutional neural network based on the InceptionV3 architecture.
-##### 2.Conduct classification training and testing on the Fashion-MNIST dataset using the InceptionV3 architecture.
-##### 3.Learn to load pre-trained weights and analyze the network architecture.
-
-###### 1.掌握InceptionV3架构卷积神经网络基本原理。
-###### 2.利用InceptionV3架构对Fashion-MNIST数据集进行分类训练和测试。
-###### 3.学习调用预训练权重，并分析网络架构。
+## 1.实验目的
+###### 1.掌握ResNet架构卷积神经网络的基本原理。
+###### 2.利用ResNet架构对SVHN-街道实景门牌数据集进行分类训练和测试。
+###### 3.构建不同残差块结构（恒等映射块、投影块、全映射块）并对比分析他们的功能和实验效果。
 
 ##
 
-## 2.Experimental Content
-##### Due to computational resource constraints, the data volume of the Fashion-MNIST dataset is limited, and the image size is converted to adapt to the InceptionV3 network architecture (3×299×299). Load the pre-trained weights of InceptionV3, and adjust the final fully connected layer to perform a classification task with 10 outputs. Finally, conduct a detailed analysis of the InceptionV3 network architecture model.
-###### 由于计算资源的限制，对数据集Fashion-MNIST数据量进行限制，对图像的尺寸进行转换为适应InceptionV3网络架构（3x299x299）。调用InceptionV3预训练权重，并调整最后一层全连接层做输出为10的分类任务。最后对InceptionV3网络架构的模型具体分析。
+## 2.实验内容
+###### 为对比不同残差块的性能差别，搭建了包含 8 个残差块的轻量化 ResNet 网络，用 SVHN 数据集完成训练和测试；采用 32 维通道数，模拟简单场景下的残差网络；尝试选取不同规模大小的训练数据，对比恒等映射块、投影块、全映射块这三种残差块在参数量、计算时间开销上的差异，以及各自的分类准确率和损失变化。
 ##
-#### 2.1.Fashion-MNIST Dataset Loading and Processing
+#### 2.1.SVHN 数据集加载及处理
 ##
-##### （1）Import Pytorch and related tool libraries
-###### 导入 PyTorch 及相关工具库
+##### （1）导入Pytorch和相关的工具库
 ```
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torchvision import datasets,transforms,models
+from torchvision import datasets,transforms
 from torch.utils.data import Subset
 from torchsummary import summary
 import numpy as np
 ```
 ##
-##### （2）Set the training batch size and runtime device, load the dataset, and perform image size conversion and tensor format transformation（3x299x299）on the data images. Set a scaling factor n to control the data volume, and after setting a random seed, randomly select a certain number of datasets to serve as the training set and test set.
-###### 设置训练批次大小和运行设备，并加载数据集，对数据图片进行尺寸大小的转换（3x299x299）以及张量格式的变化。设置比例系数n控制数据量，并设置随机种子后，随机抽选一定数量的数据集作为训练集和测试集。
+##### （2）设置训练批次大小和运行设备，加载 SVHN 数据集并进行图像进行归一化、尺寸调整处理；设置随机种子随机选取数据集子集作为训练集和测试集，保证实验可复现性。
 ```
-batch_size = 16
+batch_size = 32
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 transform = transforms.Compose([
-    # 将图像缩放到299×299尺寸（InceptionV3要求的输入尺寸）
-    transforms.Resize(299),
-    # 将FashionMNIST的单通道灰度图转换为3通道灰度图（InceptionV3要求3通道输入，三通道值相同）
-    transforms.Grayscale(num_output_channels=3),
-    # 将PIL图像/NumPy数组转换为PyTorch张量，同时将像素值从[0,255]归一化到[0.0,1.0]
-    transforms.ToTensor()
+    transforms.Resize((32, 32)),  # 适配轻量化ResNet输入尺寸
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.4377, 0.4438, 0.4728], std=[0.1980, 0.2010, 0.1970])  # SVHN数据集归一化
 ])
-# 加载FashionMNIST完整训练集，自动下载至data目录
-train_full = datasets.FashionMNIST('data',train=True,download=True,transform=transform)
-test_full = datasets.FashionMNIST('data',train=False,download=True,transform=transform)
-```
-##
-###### 选取不同比例数据,创建一个固定随机种子的numpy随机数生成器,随机抽取子集索引
-```
-n = 10 
-rng = np.random.default_rng(42)
+# 加载SVHN完整训练集和测试集
+train_full = datasets.SVHN('data', split='train', download=True, transform=transform)
+test_full = datasets.SVHN('data', split='test', download=True, transform=transform)
 
-# 从训练集全量数据的索引中随机抽取子集索引
-# replace=False：不重复抽样（保证每个索引只选一次，避免同一个样本被多次选中）
-train_idx = rng.choice(len(train_full), len(train_full)//n, replace=False)    # train_idx是一个一维数组，存放被选中的训练集样本索引
+# 控制数据量：选取全量数据的一定比例
+n = 1  # n=1使用全量数据，可调整为更大值减少数据量
+rng = np.random.default_rng(42)  # 固定随机种子
+train_idx = rng.choice(len(train_full), len(train_full)//n, replace=False)
 test_idx = rng.choice(len(test_full), len(test_full)//n, replace=False)
+
+# 构建数据加载器
+train_loader = torch.utils.data.DataLoader(Subset(train_full, train_idx), 
+                                           batch_size=batch_size, shuffle=True)
+```
+
+##
+#### 2.2.构建ResNet网络并设置不同残差模块
+##### 定义三种不同的残差块（恒等映射块、投影块、全映射块），适配 SVHN 10 分类任务。
+##
+##### 1.恒等映射块
+```
+class IdentityBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(IdentityBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.channel_pad = out_channels - in_channels
+
+    def forward(self, x):
+        residual = x
+        # 通道不匹配时零填充
+        if self.channel_pad > 0:
+            residual = torch.cat([residual, torch.zeros_like(residual)[:, :self.channel_pad, :, :].to(device)], dim=1)
+        
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        
+        out += residual
+        out = self.relu(out)
+        return out
 ```
 ##
-###### PyTorch核心数据加载器：将数据集封装为可迭代的批次迭代器
+##### 2.投影块，1×1卷积
 ```
-train_loader = torch.utils.data.DataLoader(Subset(train_full,train_idx),# 从完整数据集中截取指定子集
-                                           batch_size=batch_size,shuffle=True)
-test_loader = torch.utils.data.DataLoader(Subset(test_full,test_idx),
-                                           batch_size=batch_size,shuffle=True)
+class ProjectionBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ProjectionBlock, self).__init__()
+        # 主分支
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        # 捷径分支（1×1卷积投影）
+        self.shortcut = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels)
+        )
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        
+        out += residual
+        out = self.relu(out)
+        return out
 ```
 ##
-#### 2.2.Construct and adjust the network architecture
-##### Load the pre-trained weights of InceptionV3, and adjust the final fully connected layer to perform a classification task with 10 outputs.
-###### 调用InceptionV3预训练权重，并调整最后一层全连接层做输出为10的分类任务。
+##### 3.全映射块，3×3卷积+激活
 ```
-model = models.inception_v3(weights=models.Inception_V3_Weights.DEFAULT)
-model.fc = nn.Linear(model.fc.in_features,10)
-model = model.to(device)
-optimizer = optim.Adam(model.parameters(),lr=1e-4)
+class FullMappingBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(FullMappingBlock, self).__init__()
+        # 主分支
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        # 捷径分支（3×3卷积+激活）
+        self.shortcut = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        
+        out += residual
+        out = self.relu(out)
+        return out
 ```
 ##
 #### 2.3.Model Training and Evaluation
