@@ -147,225 +147,188 @@ class FullMappingBlock(nn.Module):
         return out
 ```
 ##
-#### 2.3.Model Training and Evaluation
-##### Configure the number of training epochs and demonstrate the procedure, including the forward pass, loss computation, and backpropagation.
-###### 设置训练轮数并且展示数据训练过程的前向传播，损失计算，反向传播等流程。
-###### Training Process
+##### 4.构建有8个残差块连接的ResNet网络，适配三种不同的残差块进行训练
 ```
-epochs=10
-accs,losses=[],[]
-for epoch in range(epochs):
-    for batch_idx,(x,y) in enumerate(trainloader):
-        x,y=x.to(device),y.to(device)
-        optimizer.zero_grad()
-        out = model(x)
-        out = outputs.logits  # 主分类输出
-        loss = F.cross_entropy(out,y)
-        loss.backward()
-        optimizer.step()
-```
-###### Testing Process
-```
-with torch.no_grad():
-        for batch_idx,(x,y) in enumerate(testloader):
-            x,y = x.to(device),y.to(device)
-            out = model(x)
-            total_loss +=F.cross_entropy(out,y).item()
-            correct +=(out.argmax(1)==y).sum().item()
-```
-##
-#### 2.4.Introduction to the Network Architecture(网络架构介绍)
-##
-##### (1)Results of the dataset
-下载好的数据集的格式
-```
-train_full
-```
-##
-```
-Dataset FashionMNIST
-    Number of datapoints: 60000
-    Root location: data
-    Split: Train
-    StandardTransform
-Transform: Compose(
-               Resize(size=299, interpolation=bilinear, max_size=None, antialias=True)
-               Grayscale(num_output_channels=3)
-               ToTensor()
-           )
-```
-##
-随机选取完的训练集格式
-```
-train_loader
-```
-##
-```
-<torch.utils.data.dataloader.DataLoader at 0x15963dcea40>
-```
-##
-##### (2)Introduction to the Output of the InceptionV3 Model(InceptionV3的model输出介绍)
-总体结构图：
-```
-输入图片（299x299x3）
-↓ 浅层卷积+池化（Conv2d_1a,maxpool2）
-↓ InceptionA（Mixed_5b/5c/5d）[此处bcd是指3个InceptionA模块]
-↓ InceptionB（Mixed_6a）
-↓ InceptionC（Mixed_6b/6c/6d/6e）[此处bcde是指4个InceptionC模块]
-↓ InceptionD（Mixed_7a）
-↓ InceptionE（Mixed_7b/7c）[此处bc是指2个InceptionE模块]
-↓ 池化+全连接 → 输出10分类结果
-```
-##
-分别介绍InceptionA，B，C，D，E的结构和功能：
-###### InceptionA:
-```
-1个 InceptionA 分为 4 个分支（基础多分支模块），用来特征提取，不会缩放图像尺寸。
-输入（192通道）
-├─ 分支1：1x1卷积 → 64通道（减小通道数，减少算力使用）
-├─ 分支2：1x1卷积（48通道）→ 5x5卷积（64通道）（先减小通道数再获取中尺度特征）
-├─ 分支3：1x1卷积（64通道）→ 3x3卷积（96通道）→ 3x3卷积（96通道）（先减小通道数再获取大尺度特征）
-└─ 分支4：3x3池化 → 1x1卷积（32通道）（池化后再减小通道数，保留全局信息）
-→ 4个分支结果拼接（64+64+96+32=256通道）→ 输出
-```
-##
-###### InceptionB:
-```
-1个 InceptionB 分为 3(2个核心) 个分支（缩图模块）。
-输入（288通道）
-├─ 分支1：3x3卷积（ stride=2 ）→ 384通道（缩小图像尺寸，获取大尺度特征）
-└─ 分支2：1x1卷积（64通道）→ 3x3卷积（96通道）→ 3x3卷积（ stride=2 ）→ 96通道（先提特征再缩小图像尺寸，保细节）
-→ 2个分支结果拼接 + 没有列出来的池化层通道数→ 输出（768）
-```
-##
-###### InceptionC:
-```
-1个 InceptionC 分为 3 个分支（长条特征模块），特征提取细化，不会缩放图像尺寸。
-输入（768通道）
-├─ 分支1：1x1卷积 → 192通道（减小通道数）
-├─ 分支2：1x1卷积（128通道）→ 1x7卷积 → 7x1卷积 → 192通道（把7x7拆成1x7+7x1，获取长条特征）
-└─ 分支3：1x1卷积（128通道）→ 7x1卷积 → 1x7卷积 → 7x1卷积 → 1x7卷积 → 192通道（多轮拆卷积，获取更细的长条）
-→ 所有分支+池化分支拼接 → 输出（保持768通道）
-```
-##
-###### InceptionD
-```
-1个 InceptionD 3(2个核心) 个分支（二次缩图模块）。
-输入（768通道）
-├─ 分支1：1x1卷积（192通道）→ 3x3卷积（ stride=2 ）→ 320通道（先减小通道数再缩小图像尺寸）
-└─ 分支2：1x1卷积（192通道）→ 1x7卷积 → 7x1卷积 → 3x3卷积（ stride=2 ）→ 192通道（先获取长条特征再缩图）
-→ 2个分支拼接 + 其他池化层 → 输出（1280通道）
-```
-##
-######  InceptionE
-```
-1个 InceptionE 4(3个核心) 个分支（细化模块），最后特征提取，不会缩放图像尺寸，获取最细粒度特征）
-输入（1280→2048通道）
-├─ 分支1：1x1卷积 → 320通道（减小通道数）
-├─ 分支2：1x1卷积（384通道）→ 拆成两个子分支：1x3卷积 + 3x1卷积 → 拼接（384+384=768通道）
-└─ 分支3：1x1卷积（448通道）→ 3x3卷积 → 拆成两个子分支：1x3卷积 + 3x1卷积 → 拼接（384+384=768通道）
-→ 所有分支+池化分支拼接 → 输出（2048通道）
-```
-##
-输入model输出实际结构内容
-```
-model
-```
-##
-```
-Inception3(
-  (Conv2d_1a_3x3): BasicConv2d(
-    (conv): Conv2d(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False)
-    (bn): BatchNorm2d(32, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
-  )
+class ResNetExperiment(nn.Module):
+    """ResNet（和论文结构对齐：初始卷积+残差层+池化+全连接）"""
+    def __init__(self, block_type, num_classes=NUM_CLASSES):
+        super(ResNetExperiment, self).__init__()
+        # 初始卷积层（处理原始3通道输入）
+        self.init_conv = nn.Conv2d(3, 32, kernel_size=3, padding=1, bias=False)
+        self.init_bn = nn.BatchNorm2d(32)  #批量归一化
+        self.init_relu = nn.ReLU(inplace=True)
+        
+        # 残差层（堆叠2个残差块）
+        self.res_block1 = block_type(32, 32)
+        self.res_block2 = block_type(32, 32)
+        self.res_block3 = block_type(32, 32)
+        self.res_block4 = block_type(32, 32)
+        self.res_block5 = block_type(32, 32)  
+        self.res_block6 = block_type(32, 32)
+        self.res_block7 = block_type(32, 32)  
+        self.res_block8 = block_type(32, 32)
 
-  ......
-  ......
+        # 池化+全连接（分类头）
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # 全局平均池化
+        self.dropout = nn.Dropout(0.3)  # 强化正则化
+        self.fc = nn.Linear(32, num_classes)
 
-  (Mixed_5c): InceptionA(
-    (branch1x1): BasicConv2d(
-      (conv): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
-      (bn): BatchNorm2d(64, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
-    )
-   ......
-   ......
-  )
-  (Mixed_6a): InceptionB(
-    (branch3x3): BasicConv2d(
-      (conv): Conv2d(288, 384, kernel_size=(3, 3), stride=(2, 2), bias=False)
-      (bn): BatchNorm2d(384, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
-    )
-    ......
-    ......
-  )
-  (Mixed_6b): InceptionC(
-    (branch1x1): BasicConv2d(
-      (conv): Conv2d(768, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
-      (bn): BatchNorm2d(192, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
-    )
-    ......
-    ......
-  )
-  (AuxLogits): InceptionAux(
-    (conv0): BasicConv2d(
-      (conv): Conv2d(768, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
-      (bn): BatchNorm2d(128, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
-    )
-   ......
-   ......
-  )
-  (Mixed_7b): InceptionE(
-    (branch1x1): BasicConv2d(
-      (conv): Conv2d(1280, 320, kernel_size=(1, 1), stride=(1, 1), bias=False)
-      (bn): BatchNorm2d(320, eps=0.001, momentum=0.1, affine=True, track_running_stats=True)
-    )
-    ......
-    ......
-  )
-  (avgpool): AdaptiveAvgPool2d(output_size=(1, 1))
-  (dropout): Dropout(p=0.5, inplace=False)
-  (fc): Linear(in_features=2048, out_features=10, bias=True)
+
+    def forward(self, x):
+        # 初始卷积
+        x = self.init_conv(x)
+        x = self.init_bn(x)
+        x = self.init_relu(x)
+        
+        # 残差块
+        x = self.res_block1(x)
+        x = self.res_block2(x)
+        x = self.res_block3(x)
+        x = self.res_block4(x)
+        x = self.res_block5(x)
+        x = self.res_block6(x)
+        x = self.res_block7(x)
+        x = self.res_block8(x)
+
+        # 分类
+        x = self.avg_pool(x)
+        x = x.view(x.size(0), -1)  # 展平
+        x = self.dropout(x)
+        x = self.fc(x)
+        return x
+
 ```
 ##
-## 3.Experimental Results and Analysis
-#### Training Log(epoch,loss,accuracy)
-下列结果是n=100,训练集600张图片的结果
-```
-epoch0:loss=0.5322,acc=0.7800
-epoch1:loss=0.7331,acc=0.8000
-epoch2:loss=0.7871,acc=0.7500
-epoch3:loss=0.5310,acc=0.8400
-epoch4:loss=0.7671,acc=0.7800
-epoch5:loss=0.8424,acc=0.7800
-epoch6:loss=1.1080,acc=0.7500
-epoch7:loss=0.5214,acc=0.8600
-epoch8:loss=0.6264,acc=0.8100
-epoch9:loss=0.6391,acc=0.7600
-```
+#### 2.3.模型训练
+##### 设置训练轮数并且展示数据训练过程的前向传播，损失计算，反向传播等流程。
 ##
-下列结果是n=10,训练集6000张图片的结果
 ```
-epoch0:loss=0.3711,acc=0.8680
-epoch1:loss=0.3311,acc=0.8960
-epoch2:loss=0.2609,acc=0.9160
-epoch3:loss=0.2851,acc=0.9030
-epoch4:loss=0.2565,acc=0.9200
-epoch5:loss=0.3223,acc=0.9060
-epoch6:loss=0.2958,acc=0.9200
-epoch7:loss=0.3218,acc=0.9130
-epoch8:loss=0.3321,acc=0.9160
-epoch9:loss=0.4530,acc=0.8990
+# 训练
+        model.train()
+        train_loss = 0.0
+        train_correct = 0
+        train_total = 0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item() * inputs.size(0)
+            _, pred = outputs.max(1)
+            train_total += labels.size(0)
+            train_correct += pred.eq(labels).sum().item()
 ```
 ##
-##### 实验结果发现，由于预训练模型很大，所以要数据较多才可以训练效果提升，最后在不同数量的数据集下，损失最小为0.2565，同时准确率在92%。
+```
+# 测试
+        model.eval()
+        test_loss = 0.0
+        test_correct = 0
+        test_total = 0
+        with torch.no_grad():
+            for inputs, labels in test_loader:
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                test_loss += loss.item() * inputs.size(0)
+                _, pred = outputs.max(1)
+                test_total += labels.size(0)
+                test_correct += pred.eq(labels).sum().item()
+```
 ##
-## 4.Experimental Summary
-#### 4.1.Overall Reflection on the Experiment
-###### 1.)本次实验使用了Fashion-MNIST数据集，与MNIST数据集都是基础分类数据集，输出为10分类任务。
-###### 2.)本次实验虽然没有自己搭建InceptionV3架构，但是通过调用预训练模型，知道了网络图像输入尺寸参数，并且又一次复习了全连接分类层的通道数修改和又一次复现了网络训练和测试的流程。
-###### 3.)通过上网搜索资料，查阅了InceptionV3的基本结构组成，了解了InceptionA，B，C，D，E不同模块的结构和功能。对于Inception系列网络模块基于感受野大小不变的原则有了更深刻的体会。
+
 ##
-#### 4.2.Problems in the Experiment
-###### 1.)实验中通过对参数的运行，例如model，一开始没有真正理解清楚模块参数变化带来的特征图尺寸或者是通道数的变化情况，通过查阅资料现已经理解清楚。
-###### 2.)实验中还遇到训练效果不好的问题，上网查阅资料发现Inception预训练模型网络结构很深，所以少量数据及可能不足以支撑实验效果，通过改进实验数据量大小，改善了损失和准确率的大小。
+#### 2.4.网络架构介绍
+##
+##### (1)三个不同残差块结构区别
+```
+# 恒等映射块（Identity Block）
+输入 → 主分支（2层3×3卷积） → 输出
+      ↓ 无参数恒等映射（通道不匹配时零填充）
+x短路径：输入直接连接到输出，无额外卷积/参数
+
+# 投影块（Projection Block）
+输入 → 主分支（2层3×3卷积） → 输出
+      ↓ 1×1卷积投影（匹配通道维度）
+x短路径：有1×1卷积+BN（归一化层），少量额外参数
+
+# 全映射块（Full Mapping Block）
+输入 → 主分支（2层3×3卷积） → 输出
+      ↓ 3×3卷积+BN+ReLU（全维度映射）
+x短路径：有完整卷积层，参数最多
+```
+##
+##### (2) ResNet 的整体结构示意流程
+```
+输入图像（3×32×32）
+↓ 初始卷积层（3→32通道，3×3卷积+BN+ReLU）
+↓ 残差块（8个，32→32通道，无尺寸变化）
+↓ 平均池化（32×1×1）
+↓ Dropout（0.3）
+↓ 全连接层（32→10）→ 输出10分类结果
+```
+##
+## 3.实验结果与分析
+#### 初始化数据集时，先是选取10000张训练集数据，3000张测试及数据，但实验结果未达到预期，故现在选用60000张训练数据，15000张测试数据
+#### 1.恒等映射块（Identity Block）训练测试结果
+```
+epoch0:loss=1.6504,acc=0.4299
+epoch1:loss=0.6004,acc=0.8261
+epoch2:loss=0.4246,acc=0.8776
+epoch3:loss=0.3633,acc=0.8964
+epoch4:loss=0.3277,acc=0.9067
+epoch5:loss=0.2998,acc=0.9150
+epoch6:loss=0.2791,acc=0.9211
+epoch7:loss=0.2679,acc=0.9248
+epoch8:loss=0.2485,acc=0.9304
+epoch9:loss=0.2404,acc=0.9330
+最终测试：loss=0.2497,acc=0.9289
+```
+##
+#### 2.投影块（Projection Block）训练测试结果
+```
+epoch0:loss=1.5838,acc=0.4552
+epoch1:loss=0.5609,acc=0.8440
+epoch2:loss=0.3885,acc=0.8899
+epoch3:loss=0.3336,acc=0.9053
+epoch4:loss=0.3035,acc=0.9149
+epoch5:loss=0.2794,acc=0.9222
+epoch6:loss=0.2638,acc=0.9262
+epoch7:loss=0.2470,acc=0.9317
+epoch8:loss=0.2313,acc=0.9358
+epoch9:loss=0.2255,acc=0.9375
+最终测试：loss=0.2318,acc=0.9373
+```
+##
+#### 3.全映射块（Full Mapping Block）训练测试结果
+```
+epoch0:loss=1.4030,acc=0.5316
+epoch1:loss=0.4986,acc=0.8614
+epoch2:loss=0.3696,acc=0.8964
+epoch3:loss=0.3190,acc=0.9106
+epoch4:loss=0.2882,acc=0.9190
+epoch5:loss=0.2646,acc=0.9269
+epoch6:loss=0.2522,acc=0.9298
+epoch7:loss=0.2357,acc=0.9347
+epoch8:loss=0.2216,acc=0.9389
+epoch9:loss=0.2166,acc=0.9411
+最终测试：loss=0.2250,acc=0.9413
+```
+##
+##### 实验结果分析：
+###### 1. 性能表现：全映射块最终测试准确率最高（94.13%），投影块（93.73%），恒等映射块稍低（92.89%），最高最低差距 1.24%，属于可接受范围；训练过程中，全映射块收敛速度最快，恒等映射块收敛稍慢但更稳定。
+###### 2. 资源消耗（这里比较的是训练参数量以及训练测试耗时）：恒等映射块参数量最少（大概182.56k），训练时间最短（4min）。
+###### 3. 泛化能力：三者训练和测试准确率差值均在 1% 以内，无明显过拟合；其中恒等映射块差值最小（0.41%），泛化稳定性最优。
+##
+## 4.实验小结
+#### 4.1.实验总体反思
+###### 1.)实验基于 SVHN 数据集对比了三种残差块的性能，验证了 ResNet 残差连接的核心思路 ，数据集数量较多时，ResNet在x短路径下参数尽可能少，会在保证准确率差值不大的情况下计算资源消耗最少。（本来是想验证老师上课讲的路径上参数越少错误率越低但由于数据量的问题可能会过早导致过拟合问题所以此处就分析了计算资源数量）
+###### 2.)动手搭建了包含 8 个残差块的轻量化 ResNet，从网络层的定义、模块的组合到整体前向传播流程，更清楚地掌握了 ResNet 的搭建逻辑，8 层网络在 SVHN 数据集上也能稳定达到 92% 以上的分类准确率。
+###### 3.)搞懂了不同残差块的设计思路：恒等映射块的x短路径没有额外参数，不用额外计算，能节省算力；投影块靠 1×1 卷积调整通道数，能适配不同维度的特征图；全映射块的**捷径**路径加了更多卷积层和参数，虽然拟合数据的能力更强，但需要的计算资源也更多，训练起来更占内存。
+##
+#### 4.2.实验中遇到的问题
+###### 1.)实验前只记住了残差公式 H(x)=F(x)+x，没理解梯度传递逻辑，推导后才懂恒等映射的梯度优势，通过查阅资料现已经理解清楚。
+###### 2.)实验中浅层 ResNet 里全映射块表现更好，和老师上课讲的不一样，分析后才知道浅层网络体现不出恒等映射的架构优势。上网查阅资料发现ResNet网络结构很深，所以少量数据及可能不足以支撑实验效果，通过改进实验数据量大小，改善了损失和准确率的大小。
 ##
