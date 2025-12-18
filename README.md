@@ -238,8 +238,6 @@ class ResNetExperiment(nn.Module):
                 test_correct += pred.eq(labels).sum().item()
 ```
 ##
-
-##
 #### 2.4.网络架构介绍
 ##
 ##### (1)三个不同残差块结构区别
