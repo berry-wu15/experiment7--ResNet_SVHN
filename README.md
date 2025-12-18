@@ -322,7 +322,7 @@ epoch9:loss=0.2166,acc=0.9411
 
 <table>
  <tr>
- <td><img src="./resnet_block_comparison.png"  width="500px" height="700px" alt="digit 0"></td>
+ <td><img src="./resnet_block_comparison.png"  width="700px" height="900px" alt="digit 0"></td>
  </tr>
 </table>
 
