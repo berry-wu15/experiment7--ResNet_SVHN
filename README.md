@@ -1,4 +1,5 @@
-# **experiment7--ResNet_SVHN** (实验7-ResNet实现SVHN分类)
+# **Experiment7--ResNet_SVHN** 
+(实验7-ResNet实现SVHN分类)
 ##### This experiment compares the performance, generalization ability and resource consumption of three residual block designs (identity block, projection block, and full-mapping block) on the SVHN dataset.
 ###### 本实验比较了三种残差块设计（恒等映射块、投影块和全映射块）在 SVHN 数据集上的性能、泛化能力和资源消耗。
 ##
